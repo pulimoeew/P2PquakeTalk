@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>P2PQuake朗読システム</title>
+    <title>P2PQuake朗読システム</title> //2778 2778 2778 2778 2778 2778（（（
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <style>
         body { 
@@ -152,7 +152,7 @@
     <div class="setting">
         <label>朗读方式: 
             <select id="voiceType">
-                <option value="api">API朗读</option>
+                <option value="api">BouyomiChan朗读(端口号50080)</option>
                 <option value="browser">其他</option>
             </select>
         </label>
@@ -165,7 +165,7 @@
     <div id="alert-container">
         <div id="info"></div>
     </div>
-    <div id="status">初期化中...</div>
+    <div id="status">加载中...</div>
     
     <!-- 版本信息显示 -->
     <div id="version-info">制作: pulimo999 版本: <span id="current-version"></span></div>
@@ -197,7 +197,7 @@
 
 <script>
 // 当前版本号
-const CURRENT_VERSION = "1.0";
+const CURRENT_VERSION = "1.1";
 
 // 持久化存储
 const storage = {
@@ -231,7 +231,7 @@ ${formatTsunami(data.earthquake.domesticTsunami)}`;
 
     // 震度速報
     ScalePrompt: (data) => {
-        // 按震度分组
+      
         const grouped = {};
         data.points.forEach(point => {
             const scale = point.scale;
@@ -244,12 +244,12 @@ ${formatTsunami(data.earthquake.domesticTsunami)}`;
         // 创建排序后的震度列表
         const sortedScales = Object.keys(grouped)
             .map(scale => parseInt(scale))
-            .sort((a, b) => b - a); // 降序排列
+            .sort((a, b) => b - a); 
         
         // 构建地区信息
         const areas = sortedScales.map(scale => {
             const scaleText = formatScale(scale);
-            const locations = grouped[scale].join('、'); // 分隔地区
+            const locations = grouped[scale].join('、'); 
             return `震度${scaleText}：${locations}`;
         }).join('\n');
 
@@ -258,17 +258,23 @@ ${formatTsunami(data.earthquake.domesticTsunami)}
 震度3以上の地域は、以下の通りです。\n${areas}`;
     },
 
-    // 遠地地震
-    Foreign: (data) => {
+    // 遠地地震and火山喷发情报
+     Foreign: (data) => {
+        
+        if (isVolcanicEruption(data)) {
+            return `遠地噴火情報を受信しました。\n${data.comments.freeFormComment}`;
+        }
+        
+       
         return `遠地地震情報を受信しました。${formatTime(data.earthquake.time)}ごろ、海外で地震がありました。
 震源地は、${data.earthquake.hypocenter.name}で、震源の深さは${formatDepth(data.earthquake.hypocenter.depth)}、
-地震の規模を示すマグニチュード、は${formatMagnitude(data.earthquake.hypocenter.magnitude)}と推定されます。
+地震の規模を示すマグニチュードは${formatMagnitude(data.earthquake.hypocenter.magnitude)}と推定されます。
 ${formatTsunami(data.earthquake.domesticTsunami)}
 また、${formatForeignTsunami(data.earthquake.foreignTsunami)}
-この地震により、観測された、最大震度は${formatScale(data.earthquake.maxScale)}です。`;
+この地震により、観測された最大震度は${formatScale(data.earthquake.maxScale)}です。`;
     },
 
-    // 紧急地震速报
+    // 紧急地震速報
     EEW: (data) => {
         
         const prefs = [...new Set(data.areas.map(area => area.pref))];
@@ -285,6 +291,13 @@ ${formatTsunami(data.earthquake.domesticTsunami)}
 ${areaText}`;
     }
 };
+
+function isVolcanicEruption(data) {
+    return data.issue.type === "Foreign" && 
+           data.earthquake.hypocenter.depth === -1 &&
+           data.earthquake.hypocenter.magnitude === -1 &&
+           data.earthquake.maxScale === -1;
+}
 
 // 数据格式化工具函数
 function formatTime(timeStr) {
@@ -350,7 +363,7 @@ function formatForeignTsunami(tsunami) {
 async function checkUpdate() {
     try {
         // 获取地震信息
-        const res = await fetch('https://api.p2pquake.net/v2/history?codes=556&codes=551');
+        const res = await fetch('https://api.p2pquake.net/v2/history?codes=556&codes=551&limit=1');
         const [data] = await res.json();
         
         if (data.id !== currentId) {
