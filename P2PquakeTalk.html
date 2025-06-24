@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>P2PQuake朗読システム</title>
+    <title>地震情報朗読システム</title>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <style>
         body { 
@@ -197,7 +197,7 @@
 
 <script>
 // 当前版本号
-const CURRENT_VERSION = "1.1";
+const CURRENT_VERSION = "1.2";
 
 // 持久化存储
 const storage = {
@@ -212,10 +212,10 @@ let currentId = '';
 let hideTimer = null;
 
 const templates = {
-    // 震源震度情報
+   // 震源震度情報
     DetailScale: (data) => {
         return `震源・震度情報を受信しました。${formatTime(data.earthquake.time)}ごろ、地震がありました。
-震源地は${data.earthquake.hypocenter.name}で、震源の深さは${formatDepth(data.earthquake.hypocenter.depth)}、
+震源地は、${data.earthquake.hypocenter.name}で、震源の深さは${formatDepth(data.earthquake.hypocenter.depth)}、
 地震の規模を示すマグニチュード、は${formatMagnitude(data.earthquake.hypocenter.magnitude)}と推定されます。
 ${formatTsunami(data.earthquake.domesticTsunami)}
 この地震により、観測された、最大震度は${formatScale(data.earthquake.maxScale)}です。`;
@@ -274,8 +274,12 @@ ${formatTsunami(data.earthquake.domesticTsunami)}
 この地震により、観測された最大震度は${formatScale(data.earthquake.maxScale)}です。`;
     },
 
-    // 紧急地震速報
+    // 紧急地震速报
     EEW: (data) => {
+        // 取消
+        if (data.cancelled) {
+            return "先ほどの緊急地震速報はキャンセルされました。";
+        }
         
         const prefs = [...new Set(data.areas.map(area => area.pref))];
         
@@ -284,10 +288,11 @@ ${formatTsunami(data.earthquake.domesticTsunami)}
             groups.push(prefs.slice(i, i + 5).join('、'));
         }
         
+        
         const areaText = groups.join('\n');
         
-        return `緊急地震速報です、${data.earthquake.hypocenter.reduceName}で地震。
-強い揺れに警戒してください、
+        return `緊急地震速報です。${data.earthquake.hypocenter.reduceName}で地震。
+以下の地域では、強い揺れに警戒してください。
 ${areaText}`;
     }
 };
