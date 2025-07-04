@@ -1,4 +1,5 @@
 ### 注意！由于websocket本身的“特性”，2.0开始的版本成功连接到websocket服务器后没有显示地震情报为正常现象！需要服务器主动推送消息！
+### [P2Ptalkweb](https://pulimo999.github.io/p2ptalkweb/)
 ### api来源：[p2pquake](https://www.p2pquake.net/develop/json_api_v2/)
 ## 如何使用：
 ## 1.首先，确保你已经准备好了Bouyomichan，并且打开了http连接功能，端口号为50080。
