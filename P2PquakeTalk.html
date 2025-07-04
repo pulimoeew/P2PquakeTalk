@@ -194,6 +194,22 @@
             background-color: #f44336;
             box-shadow: 0 0 8px #f44336;
         }
+        
+        .notification-control {
+            background: #1a2a6c;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+            font-size: 12px;
+        }
+        
+        #notification-status {
+            font-size: 12px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -209,6 +225,10 @@
                 <select id="voiceList"></select>
             </label>
         </span>
+        <div>
+            <button id="notification-toggle" class="notification-control">申请使用通知</button>
+            <div id="notification-status">通知: 不允许喵~</div>
+        </div>
     </div>
     <div id="alert-container">
         <div id="info"></div>
@@ -219,7 +239,7 @@
     </div>
     
     <!-- 版本信息显示 -->
-    <div id="version-info">制作: pulimo999 版本: <span id="current-version">
+    <div id="version-info">制作: pulimo999 版本: <span id="current-version"></div>
     
     <!-- 更新提示框 -->
     <div id="update-overlay"></div>
@@ -230,11 +250,11 @@
         <div class="version-compare">
             <div class="version-box current-version">
                 当前版本<br>
-                <span id="current-version-display">
+                <span id="current-version-display"></span>
             </div>
             <div class="version-box latest-version">
                 最新版本<br>
-                <span id="latest-version-display">
+                <span id="latest-version-display"></span>
             </div>
         </div>
         
@@ -248,7 +268,7 @@
 
 <script>
 // 当前版本号
-const CURRENT_VERSION = "2.0";
+const CURRENT_VERSION = "2.1";
 
 // 持久化存储
 const storage = {
@@ -256,25 +276,29 @@ const storage = {
     set: (key, value) => localStorage.setItem(key, value)
 };
 
-
 let ws = null;
 let reconnectTimer = null;
-const RECONNECT_INTERVAL = 5000; 
+const RECONNECT_INTERVAL = 2000; 
 
 let synth = window.speechSynthesis;
 let voices = [];
-let currentId = '';
 let hideTimer = null;
 let areaData = null; 
+let notificationPermission = false;
 
-// 初始化WebSocket连接
+
 function initWebSocket() {
     updateStatus("connecting", "WebSocket连接中...");
+    
+   
+    if (ws) {
+        ws.close();
+        ws = null;
+    }
     
     ws = new WebSocket("wss://api.p2pquake.net/v2/ws");
     
     ws.onopen = function() {
-        
         if (reconnectTimer) {
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
@@ -286,36 +310,36 @@ function initWebSocket() {
         try {
             const data = JSON.parse(event.data);
             
-            
+            // 只处理551和556类型的数据
             if (data.code === 551 || data.code === 556) {
                 processEarthquakeData(data);
             }
         } catch (e) {
+            console.error("数据解析错误:", e);
             updateStatus("connected", `データ解析エラー: ${e.message}`);
         }
     };
     
     ws.onerror = function(error) {
-        updateStatus("disconnected", `WebSocketエラー: ${error.message}`);
+        console.error("WebSocket错误:", error);
+        updateStatus("disconnected", `WebSocketエラー`);
         scheduleReconnect();
     };
     
     ws.onclose = function(event) {
+        console.log("WebSocket关闭:", event);
         if (event.wasClean) {
-            updateStatus("disconnected", `连接已断开: ${event.code} ${event.reason}`);
+            updateStatus("disconnected", `哎呀呀，连接怎么断开了捏`);
         } else {
-            updateStatus("disconnected", "连接被关闭");
+            updateStatus("disconnected", "哎呀呀，连接怎么错误了捏");
         }
         scheduleReconnect();
     };
 }
 
-
 function scheduleReconnect() {
-    
     if (reconnectTimer) return;
     
-   
     reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         updateStatus("connecting", "尝试重连中...");
@@ -337,21 +361,24 @@ function processEarthquakeData(data) {
     const now = new Date();
     const timeStr = now.toLocaleTimeString();
     
-    if (data.id !== currentId) {
-        currentId = data.id;
-        let text;
-        
-        if (data.code === 556) {
-            text = templates.EEW(data);
-        } else {
-            const template = templates[data.issue.type] || (d => `未知の情報タイプ: ${d.issue.type}`);
-            text = template(data);
-        }
-        
-        showAlert(text);
-        speakText(text);
-        updateStatus("connected", `${timeStr} 情報更新 (${data.code})`);
+    let text;
+    
+    if (data.code === 556) {
+        text = templates.EEW(data);
+    } else if (data.code === 551) {
+        const template = templates[data.issue.type] || (d => `未知的情报: ${d.issue.type}`);
+        text = template(data);
+    } else {
+        return; 
     }
+    
+    showAlert(text);
+    speakText(text);
+    
+    // 发送通知
+    sendNotification(data);
+    
+    updateStatus("connected", `${timeStr} 情報更新 (${data.code})`);
 }
 
 async function loadAreaData() {
@@ -389,7 +416,7 @@ ${formatTsunami(data.earthquake.domesticTsunami)}
     Destination: (data) => {
         return `震源情報を受信しました。${formatTime(data.earthquake.time)}ごろ、地震がありました。
 震源地は、${data.earthquake.hypocenter.name}で、震源の深さは${formatDepth(data.earthquake.hypocenter.depth)}、
-地震の規模を示すマグニチュードは${formatMagnitude(data.earthquake.hypocenter.magnitude)}と推定されます。
+地震の规模を示すマグニチュードは${formatMagnitude(data.earthquake.hypocenter.magnitude)}と推定されます。
 ${formatTsunami(data.earthquake.domesticTsunami)}`;
     },
 
@@ -434,7 +461,7 @@ ${formatTsunami(data.earthquake.domesticTsunami)}
 
         return `遠地地震情報を受信しました。${formatTime(data.earthquake.time)}ごろ、海外で地震がありました。
 震源地は、${data.earthquake.hypocenter.name}で、震源の深さは${formatDepth(data.earthquake.hypocenter.depth)}、
-地震の規模を示すマグニチュードは${formatMagnitude(data.earthquake.hypocenter.magnitude)}と推定されます。
+地震の规模を示すマグニチュードは${formatMagnitude(data.earthquake.hypocenter.magnitude)}と推定されます。
 ${formatTsunami(data.earthquake.domesticTsunami)}
 また、${formatForeignTsunami(data.earthquake.foreignTsunami)}
 この地震により、観測された最大震度は${formatScale(data.earthquake.maxScale)}です。
@@ -458,9 +485,69 @@ ${areaText}`;
     }
 };
 
+// 发送Windows通知
+const notificationTemplates = {
+    // 震源震度情報
+    DetailScale: (data) => {
+        return `震源・震度情報: ${data.earthquake.hypocenter.name}
+${formatTimeShort(data.earthquake.time)} 発生
+深度: ${formatDepth(data.earthquake.hypocenter.depth)}
+マグニチュード: ${formatMagnitude(data.earthquake.hypocenter.magnitude)}
+最大震度: ${formatScale(data.earthquake.maxScale)}`;
+    },
+
+    // 震源情報
+    Destination: (data) => {
+        return `震源情報: ${data.earthquake.hypocenter.name}
+${formatTimeShort(data.earthquake.time)} 発生
+震源深度: ${formatDepth(data.earthquake.hypocenter.depth)}
+マグニチュード: ${formatMagnitude(data.earthquake.hypocenter.magnitude)}
+${formatTsunami(data.earthquake.domesticTsunami)}`;
+    },
+
+    // 震度速報
+    ScalePrompt: (data) => {
+        let mainRegion = "不明";
+        if (data.points && data.points.length > 0) {
+            mainRegion = findRegionByArea(data.points[0].addr);
+        }
+        return `震度速報: ${mainRegion}地方
+${formatTimeShort(data.earthquake.time)} 発生
+最大震度: ${formatScale(data.earthquake.maxScale)}`;
+    },
+
+    // 遠地情報
+    Foreign: (data) => {
+        if (isVolcanicEruption(data)) {
+            return `遠地噴火情報: ${data.comments.freeFormComment} `;
+        }
+        return `遠地地震情報: ${data.earthquake.hypocenter.name}
+${formatTimeShort(data.earthquake.time)} 発生
+マグニチュード: ${formatMagnitude(data.earthquake.hypocenter.magnitude)}
+震源深度: ${formatDepth(data.earthquake.hypocenter.depth)}
+${formatTsunami(data.earthquake.domesticTsunami)}`;
+    },
+
+    // 地震预警（EEW）
+    EEW: (data) => {
+        const prefs = [...new Set(data.areas.map(area => area.pref))];
+        return `${data.earthquake.hypocenter.reduceName}で地震、強い揺れに警戒: ${prefs.join('、')}`;
+    }
+};
+
+function isVolcanicEruption(data) {
+    return data.issue.type === "Foreign" && 
+           data.earthquake.hypocenter.depth === -1 &&
+           data.earthquake.hypocenter.magnitude === -1 &&
+           data.earthquake.maxScale === -1;
+}
+
 // 数据格式化工具函数
 function formatTime(timeStr) {
+    if (!timeStr) return "不明";
     const timePart = timeStr.split(' ')[1];
+    if (!timePart) return "不明";
+    
     const [hour, minute] = timePart.split(':');
     const hourNum = parseInt(hour);
 
@@ -473,6 +560,14 @@ function formatTime(timeStr) {
     } else {
         return `午後${hourNum - 12}時${minute}分`;
     }
+}
+
+// 简短时间
+function formatTimeShort(timeStr) {
+    if (!timeStr) return "";
+    const timePart = timeStr.split(' ')[1];
+    if (!timePart) return "";
+    return timePart.substring(0, 5);
 }
 
 function formatDepth(depth) {
@@ -514,7 +609,7 @@ function formatForeignTsunami(tsunami) {
         WarningPacificWide: '太平洋の広域で津波の可能性があります。',
         WarningIndian: 'インド洋では津波の可能性があります。',
         WarningIndianWide: 'インド洋の広域で津波の可能性があります。',
-        Potential: '一般にこの規模では津波の可能性があります。'
+        Potential: '一般にこの规模では津波の可能性があります。'
     };
     return foreignMap[tsunami] || '';
 }
@@ -537,12 +632,71 @@ function speakText(text) {
     const voiceType = $('#voiceType').val();
     
     if (voiceType === 'api') {
-        fetch(`http://localhost:50080/talk?text=${encodeURIComponent(text)}`);
+        fetch(`http://localhost:50080/talk?text=${encodeURIComponent(text)}`)
+            .catch(error => console.error('BouyomiChan连接失败:', error));
     } else if (synth && voices.length > 0) {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.voice = voices.find(v => v.voiceURI === $('#voiceList').val());
         synth.speak(utterance);
     }
+}
+
+// 发送Windows通知
+function sendNotification(data) {
+    if (!notificationPermission) return;
+    
+    let title = "P2P地震情報";
+    let body = "";
+    
+    if (data.code === 556) {
+        title = "緊急地震速報 (EEW)";
+        body = notificationTemplates.EEW(data);
+    } else if (data.code === 551) {
+        if (isVolcanicEruption(data)) {
+            title = "遠地噴火情報";
+            body = notificationTemplates.Volcanic(data);
+        } else {
+            title = "地震情報";
+            const template = notificationTemplates[data.issue.type] || (d => `情報类型: ${d.issue.type}`);
+            body = template(data);
+        }
+    }
+    
+    // 发送通知
+    if (body) {
+        new Notification(title, {
+            body: body,
+            icon: 'https://raw.githubusercontent.com/pulimo999/other/main/icon.png'
+        });
+    }
+}
+
+// 请求通知权限
+function requestNotificationPermission() {
+    if (!("Notification" in window)) {
+        updateNotificationStatus("哎呀，您的浏览器不支持通知，赶紧换一个吧~");
+        return;
+    }
+    
+    Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+            notificationPermission = true;
+            updateNotificationStatus("通知: 允许通知~");
+            // 发送测试通知
+            new Notification("P2PquakeTalk", {
+                body: "这只是一个测试~",
+                icon: 'https://raw.githubusercontent.com/pulimo999/other/main/icon.png'
+            });
+        } else {
+            notificationPermission = false;
+            updateNotificationStatus("通知: 被拒绝啦~");
+        }
+    });
+}
+
+// 更新通知状态显示
+function updateNotificationStatus(message) {
+    $('#notification-status').text(message);
 }
 
 // 语音初始化
@@ -561,37 +715,6 @@ function initVoices() {
 function toggleVoiceSelection() {
     const isBrowser = $('#voiceType').val() === 'browser';
     $('#voiceSelection').toggle(isBrowser);
-}
-
-// 版本更新检查
-function checkVersionUpdate() {
-    // 更新检测
-    const versionUrl = "https://raw.githubusercontent.com/pulimo999/other/main/update.json";
-    
-    // 时间戳，避免缓存问题
-    const timestamp = new Date().getTime();
-    
-    fetch(`${versionUrl}?t=${timestamp}`)
-        .then(response => {
-            if (!response.ok) throw new Error('版本信息获取失败');
-            return response.json();
-        })
-        .then(data => {
-            const latestVersion = data.p2pversion || data.version;
-            
-            if (!latestVersion) {
-                throw new Error('未找到版本信息！');
-            }
-            
-            $("#latest-version-display").text(latestVersion);
-            
-            if (latestVersion !== CURRENT_VERSION) {
-                $('#update-alert, #update-overlay').show();
-            }
-        })
-        .catch(error => {
-            console.error('版本检查错误:', error);
-        });
 }
 
 // 事件监听
@@ -617,6 +740,17 @@ $(document).ready(() => {
     $('#voiceList').change(() => {
         storage.set('voice', $('#voiceList').val());
     });
+    
+    // 申请通知权限按钮
+    $('#notification-toggle').click(requestNotificationPermission);
+    
+    // 检查通知权限
+    if (Notification.permission === "granted") {
+        notificationPermission = true;
+        updateNotificationStatus("通知: 可以了哦~");
+    } else {
+        updateNotificationStatus("通知: 不允许哦~");
+    }
 
     // 初始化WebSocket连接
     initWebSocket();
@@ -636,6 +770,37 @@ $(document).ready(() => {
     // 加载地区数据
     loadAreaData();
 });
+
+// 版本更新检查
+function checkVersionUpdate() {
+    // 更新检测
+    const versionUrl = "https://raw.githubusercontent.com/pulimo999/other/main/update.json";
+    
+    // 时间戳，避免缓存问题
+    const timestamp = new Date().getTime();
+    
+    fetch(`${versionUrl}?t=${timestamp}`)
+        .then(response => {
+            if (!response.ok) throw new Error('哎呀，版本信息获取失败~');
+            return response.json();
+        })
+        .then(data => {
+            const latestVersion = data.p2pversion || data.version;
+            
+            if (!latestVersion) {
+                throw new Error('哎呀，没有找到版本信息~');
+            }
+            
+            $("#latest-version-display").text(latestVersion);
+            
+            if (latestVersion !== CURRENT_VERSION) {
+                $('#update-alert, #update-overlay').show();
+            }
+        })
+        .catch(error => {
+            console.error('哎呀，版本检查错误:', error);
+        });
+}
 </script>
 </body>
 </html>
