@@ -1,5 +1,6 @@
 ### 注意！由于websocket本身的“特性”，2.0开始的版本成功连接到websocket服务器后没有显示地震情报为正常现象！需要服务器主动推送消息！
 ### 注（这个大陆/内地用户请看）：由于从2.0等版本 开始新增的一些功能和图标涉及github raw，因此，请确保您开启了翻墙工具等，否则可能会导致一些功能无法正常使用！（p2pquake api应该是没怎么受到墙的影响，但不使用翻墙工具的话可能会导致情报加载较慢）
+### 目前适配的功能：紧急地震速报(警报和取消报)，地震情报
 ### [P2Ptalkweb](https://pulimo999.github.io/p2ptalkweb/)
 ### api来源：[p2pquake](https://www.p2pquake.net/develop/json_api_v2/)
 ## 如何使用：
